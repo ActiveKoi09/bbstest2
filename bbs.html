@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BBS 高精度リハビリ処方アプリ</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #e67e22; --success: #27ae60; --bg: #f0f3f5; }
+        body { font-family: 'Hiragino Kaku Gothic ProN', sans-serif; line-height: 1.4; color: #333; max-width: 900px; margin: 0 auto; padding: 10px; background-color: var(--bg); }
+        h1 { font-size: 1.2rem; text-align: center; color: var(--primary); margin-bottom: 10px; border-bottom: 2px solid var(--accent); }
+        
+        .item-card { background: white; border-radius: 8px; padding: 10px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .item-name { font-weight: bold; font-size: 0.85rem; margin-bottom: 5px; display: block; }
+        .button-group { display: flex; gap: 3px; }
+        .score-btn { flex: 1; border: 1px solid #ddd; background: #fff; padding: 8px 0; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+        .score-btn.active.score-0 { background: #f2f2f2; color: #333; border-color: #ddd; }
+        .score-btn.active.score-1 { background: #ffadad; color: #333; border-color: #ffadad; }
+        .score-btn.active.score-2 { background: #ffd6a5; color: #333; border-color: #ffd6a5; }
+        .score-btn.active.score-3 { background: #caffbf; color: #333; border-color: #caffbf; }
+        .score-btn.active.score-4 { background: #a0c4ff; color: #333; border-color: #a0c4ff; }
+
+        .sticky-footer { position: sticky; bottom: 5px; background: #2c3e50; color: white; padding: 12px; border-radius: 12px; box-shadow: 0 -4px 10px rgba(0,0,0,0.2); }
+        .score-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555; margin-bottom: 8px; }
+        .score-val { font-size: 1.8rem; font-weight: bold; color: #f1c40f; }
+
+        .rehab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; }
+        .rehab-card { background: white; color: #333; border-radius: 6px; padding: 10px; font-size: 0.8rem; border-left: 5px solid var(--accent); }
+        .rehab-title { font-weight: bold; color: #d35400; font-size: 0.9rem; margin-bottom: 4px; border-bottom: 1px solid #eee; }
+        
+        .dosage { background: #fff4e6; padding: 5px; border-radius: 4px; margin: 5px 0; color: #d35400; font-weight: bold; }
+        .stats { background: #f8f9fa; padding: 4px; border-radius: 4px; text-align: center; font-family: monospace; font-size: 0.75rem; margin-top: 5px; }
+        .pmid { font-size: 0.7rem; color: #3498db; text-align: right; display: block; margin-top: 3px; }
+    </style>
+</head>
+<body>
+
+<h1>BBS アルゴリズム処方（用量・頻度完全版）</h1>
+
+<div id="items-container"></div>
+
+<div class="sticky-footer">
+    <div class="score-row">
+        <span>合計スコア: <span id="status-text" style="font-size: 0.8rem;"></span></span>
+        <span class="score-val" id="total-score">0</span>
+    </div>
+    <div class="rehab-grid" id="rehab-output"></div>
+</div>
+
+<script>
+const items = [
+    "1. 立ち上がり", "2. 立位保持", "3. 座位保持", "4. 着座", "5. 移乗",
+    "6. 閉眼立位", "7. 両足揃え立位", "8. 前方リーチ", "9. 床の物拾い",
+    "10. 振り返り", "11. 360度回転", "12. 段差踏み換え", "13. 継ぎ足立位", "14. 片脚立位"
+];
+
+const rehabLogic = [
+    {
+        range: [0, 14], // 重度：座位・基礎起立
+        status: "起立困難・要介助レベル",
+        content: [
+            {
+                title: "課題指向型：Sit-to-Stand (STS) 基礎",
+                detail: "麻痺側への強制荷重セッティング（非麻痺側を前方へ）。離殿直前の前方重心移動を繰り返す。",
+                dosage: "4週間 / 週5回 / 1日100回〜(10回×10set)",
+                pre: "18.2 ± 7.4", post: "25.4 ± 10.7", pmid: "26316235", url: "https://pubmed.ncbi.nlm.nih.gov/26316235/"
+            },
+            {
+                title: "下肢電気刺激(NMES) + 支持立位",
+                detail: "大腿四頭筋・ハムストリングスへ20-50Hzの刺激。装具(KAFO)を用いた静止立位保持。",
+                dosage: "4週間 / 毎日 / 1回20分",
+                pre: "FAC 0.5", post: "FAC 1.2", pmid: "35607563", url: "https://pubmed.ncbi.nlm.nih.gov/35607563/"
+            }
+        ]
+    },
+    {
+        range: [15, 35], // 中等度：起立強化・歩行準備
+        status: "起立見守り・装具歩行レベル",
+        content: [
+            {
+                title: "高強度 Sit-to-Stand 訓練",
+                detail: "椅子の高さを段階的に低くし、股関節伸展筋群の出力を最大化。麻痺側への荷重率を40%以上へ。",
+                dosage: "4-8週間 / 週5回 / 1回30分(反復)",
+                pre: "39.3 ± 3.1", post: "47.7 ± 4.7", pmid: "26316235", url: "https://pubmed.ncbi.nlm.nih.gov/26316235/"
+            },
+            {
+                title: "装具療法（AFO）下での段差踏み換え",
+                detail: "SHB AFOまたはゲイトソリューションを用い、麻痺側単脚支持時間を延長させるステップ練習。",
+                dosage: "8週間 / 週3-5回 / 1回40分",
+                pre: "43.1 ± 7.9", post: "47.7 ± 4.7", pmid: "32412431", url: "https://pubmed.ncbi.nlm.nih.gov/32412431/"
+            }
+        ]
+    },
+    {
+        range: [36, 45], // 軽度：サーキット・動的バランス
+        status: "歩行自立・転倒高リスクレベル",
+        content: [
+            {
+                title: "課題指向型サーキット訓練",
+                detail: "障害物回避、方向転換(360度)、不整地歩行を組み合わせた10〜12項目のサーキット。",
+                dosage: "12週間 / 週3回 / 1回60分(休憩含)",
+                pre: "44.7 ± 7.9", post: "46.5 ± 4.2", pmid: "22577163", url: "https://pubmed.ncbi.nlm.nih.gov/22577163/"
+            },
+            {
+                title: "動的ステップ・バランス練習",
+                detail: "前後左右への随意的ステップ。視覚フィードバック(鏡)を用いた正中位保持訓練。",
+                dosage: "4-8週間 / 週3回 / 1回45分",
+                pre: "42.5 ± 3.1", post: "48.4 ± 2.7", pmid: "27033528", url: "https://pubmed.ncbi.nlm.nih.gov/27033528/"
+            }
+        ]
+    },
+    {
+        range: [46, 56], // 維持・応用：高負荷・自主トレ
+        status: "屋外歩行・転倒低リスクレベル",
+        content: [
+            {
+                title: "高強度インターバル歩行 (HIIT)",
+                detail: "最大歩行速度の70-80%での3分間歩行 ＋ 緩徐歩行を反復。心肺負荷も考慮。",
+                dosage: "4-8週間 / 週3回 / 1回30分",
+                pre: "49.1 ± 6.2", post: "51.1 ± 6.5", pmid: "32035826", url: "https://pubmed.ncbi.nlm.nih.gov/32035826/"
+            },
+            {
+                title: "地域移行ホームエクササイズ",
+                detail: "片脚立位、継ぎ足立位、タンデム歩行を主軸とした生活環境下での自主トレーニング。",
+                dosage: "12ヶ月（継続） / 週5回 / 1回20分",
+                pre: "52.7 ± 4.5", post: "53.7 ± 4.5", pmid: "23385655", url: "https://pubmed.ncbi.nlm.nih.gov/23385655/"
+            }
+        ]
+    }
+];
+
+const scores = new Array(items.length).fill(0);
+const container = document.getElementById('items-container');
+
+// 初期表示生成
+items.forEach((name, idx) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.innerHTML = `<span class="item-name">${name}</span><div class="button-group">
+        ${[0,1,2,3,4].map(s => `<button class="score-btn score-${s} ${s===0?'active':''}" onclick="setScore(${idx},${s},this)">${s}</button>`).join('')}
+    </div>`;
+    container.appendChild(card);
+});
+
+function setScore(idx, val, btn) {
+    btn.parentElement.querySelectorAll('.score-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    scores[idx] = val;
+    update();
+}
+
+function update() {
+    const total = scores.reduce((a, b) => a + b, 0);
+    document.getElementById('total-score').innerText = total;
+
+    // アルゴリズム選択
+    const logic = rehabLogic.find(l => total >= l.range[0] && total <= l.range[1]);
+    document.getElementById('status-text').innerText = `【${logic.status}】`;
+
+    const output = document.getElementById('rehab-output');
+    output.innerHTML = logic.content.slice(0, 3).map(c => `
+        <div class="rehab-card">
+            <span class="rehab-title">${c.title}</span>
+            <div class="dosage">${c.dosage}</div>
+            <div style="margin-bottom:5px;">${c.detail}</div>
+            <div class="stats">BBS: ${c.pre} → ${c.post}</div>
+            <a href="${c.url}" target="_blank" class="pmid">PMID: ${c.pmid} ↗</a>
+        </div>
+    `).join('');
+}
+update();
+</script>
+</body>
+</html>
